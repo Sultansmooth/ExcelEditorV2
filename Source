@@ -140,19 +140,28 @@ This program will format your Excel file:
             new_wb = excel.Workbooks.Add()
             new_sheet = new_wb.Sheets(1)
             
-            # Copy template headers
+            # First, store all the data we need to copy
+            data_to_copy = {}
+            for header in self.template_headers:
+                if header in self.column_mappings:
+                    source_col = self.column_mappings[header]
+                    data_to_copy[header] = []
+                    # Get all data including the first row
+                    for row in range(1, last_row + 1):
+                        value = sheet.Cells(row, source_col).Value
+                        if value is not None:
+                            data_to_copy[header].append(value)
+            
+            # Copy template headers to first row
             for col, header in enumerate(self.template_headers, 1):
                 new_sheet.Cells(1, col).Value = header
             
-            # Copy data using known column mappings
+            # Copy data starting from row 2
             for template_col, header in enumerate(self.template_headers, 1):
-                if header in self.column_mappings:
-                    source_col = self.column_mappings[header]
-                    # Copy all data from this column
-                    for row in range(2, last_row + 1):
-                        value = sheet.Cells(row, source_col).Value
-                        if value is not None:
-                            new_sheet.Cells(row, template_col).Value = value
+                if header in self.column_mappings and header in data_to_copy:
+                    # Copy all data shifted down by one row
+                    for row_index, value in enumerate(data_to_copy[header], 2):
+                        new_sheet.Cells(row_index, template_col).Value = value
             
             # Save and close
             new_wb.SaveAs(os.path.abspath(output_path))
