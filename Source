@@ -1,0 +1,174 @@
+import tkinter as tk
+from tkinter import filedialog, messagebox
+import pandas as pd
+import os
+import win32com.client
+import re
+from difflib import SequenceMatcher
+
+class ExcelFormatter:
+    def __init__(self):
+        self.window = tk.Tk()
+        self.window.title("Excel Formatter")
+        self.window.geometry("600x400")
+        self.window.configure(bg='#f0f0f0')
+        
+        # Template headers in correct order
+        self.template_headers = [
+            "ReferenceNumber",
+            "PurchaseOrderNumber",
+            "ShipCarrier",
+            "ShipService",
+            "ShipBilling",
+            "ShipToCompany",
+            "ShipToAddress1",
+            "ShipToAddress2",
+            "ShipToCity",
+            "ShipToState",
+            "ShipToZip",
+            "ShipToCountry",
+            "SKU",
+            "Quantity"
+        ]
+        
+        # Known column mappings (1-based index)
+        self.column_mappings = {
+            "ReferenceNumber": 1,
+            "PurchaseOrderNumber": 2,
+            "ShipCarrier": 3,
+            "ShipService": 4,
+            "ShipToAddress1": 11,
+            "ShipToCity": 14,
+            "ShipToState": 15,
+            "SKU": 24,
+            "Quantity": 25
+        }
+        
+        # Create and pack widgets
+        self.create_widgets()
+        
+    def create_widgets(self):
+        # Title
+        title_label = tk.Label(
+            self.window,
+            text="Excel Formatter",
+            font=("Arial", 16, "bold"),
+            bg='#f0f0f0'
+        )
+        title_label.pack(pady=20)
+        
+        # Instructions
+        instructions = """
+This program will format your Excel file:
+1. Click 'Format File' to select and format your Excel file
+2. A new formatted file will be created with '_formatted' suffix
+        """
+        
+        instructions_label = tk.Label(
+            self.window,
+            text=instructions,
+            font=("Arial", 10),
+            bg='#f0f0f0',
+            justify='left'
+        )
+        instructions_label.pack(pady=20)
+        
+        # Format button
+        format_button = tk.Button(
+            self.window,
+            text="Format File",
+            command=self.format_file,
+            bg='#2196F3',
+            fg='white',
+            font=("Arial", 12, "bold"),
+            width=20,
+            height=2
+        )
+        format_button.pack(pady=20)
+
+    def similar(self, a, b):
+        return SequenceMatcher(None, a.lower(), b.lower()).ratio()
+
+    def find_best_match(self, header, template_headers):
+        best_match = None
+        best_ratio = 0.6  # Minimum similarity threshold
+        
+        # Common variations to check
+        variations = [
+            header,
+            header.replace(" ", ""),
+            header.replace("_", " "),
+            header.replace("-", " "),
+            header.lower(),
+            header.upper()
+        ]
+        
+        for template_header in template_headers:
+            for variation in variations:
+                ratio = self.similar(variation, template_header)
+                if ratio > best_ratio:
+                    best_ratio = ratio
+                    best_match = template_header
+        
+        return best_match
+            
+    def format_file(self):
+        # Get file to format
+        file_path = filedialog.askopenfilename(
+            title="Select File to Format",
+            filetypes=[("Excel files", "*.xls;*.xlsx")]
+        )
+        
+        if not file_path:
+            return
+            
+        try:
+            # Create output path
+            output_path = os.path.splitext(file_path)[0] + '_formatted.xlsx'
+            
+            # Setup Excel
+            excel = win32com.client.Dispatch("Excel.Application")
+            excel.Visible = False
+            
+            # Read file to format
+            wb = excel.Workbooks.Open(os.path.abspath(file_path))
+            sheet = wb.Sheets(1)
+            used_range = sheet.UsedRange
+            last_row = used_range.Rows.Count
+            
+            # Create new workbook for formatted data
+            new_wb = excel.Workbooks.Add()
+            new_sheet = new_wb.Sheets(1)
+            
+            # Copy template headers
+            for col, header in enumerate(self.template_headers, 1):
+                new_sheet.Cells(1, col).Value = header
+            
+            # Copy data using known column mappings
+            for template_col, header in enumerate(self.template_headers, 1):
+                if header in self.column_mappings:
+                    source_col = self.column_mappings[header]
+                    # Copy all data from this column
+                    for row in range(2, last_row + 1):
+                        value = sheet.Cells(row, source_col).Value
+                        if value is not None:
+                            new_sheet.Cells(row, template_col).Value = value
+            
+            # Save and close
+            new_wb.SaveAs(os.path.abspath(output_path))
+            new_wb.Close()
+            wb.Close()
+            excel.Quit()
+            
+            messagebox.showinfo("Success", f"File formatted successfully!\nSaved as: {output_path}")
+            
+        except Exception as e:
+            messagebox.showerror("Error", f"An error occurred: {str(e)}")
+            try:
+                excel.Quit()
+            except:
+                pass
+
+if __name__ == "__main__":
+    app = ExcelFormatter()
+    app.window.mainloop() 
